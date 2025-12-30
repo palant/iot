@@ -222,7 +222,7 @@ class P2PClient:
       k1 = Encryption.KEY_TABLE.index(buff[0] ^ P2P_MAGIC_NUM)
       for key in Encryption.enumerate_keys(k1):
         device = P2PClient.is_valid_punch_pkt(Encryption.decrypt(key, buff))
-        if device is not None:
+        if device is not None and not any(d.uid == device.uid for d in devices):
           devices.append(device)
 
     if not devices:
