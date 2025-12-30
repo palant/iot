@@ -170,7 +170,6 @@ class P2PClient:
       except socket.timeout as e:
         continue
 
-
   def tryLANSearch(self):
     logging.debug('Starting LAN search')
 
