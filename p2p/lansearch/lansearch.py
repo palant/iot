@@ -144,27 +144,29 @@ class P2PClient:
         logging.debug('Data from %s: %s' % (rinfo, buff))
 
         try:
-          for device in self.parsePunchPkt(buff):
-            if device.uid in self.devices:
-              continue
-
-            device.ip = rinfo[0]
-            self.devices[device.uid] = device
-
-            if device.isYunniDevice:
-              # the 'EEEE' prefix is used by both Yunni and CS2, but the check code makes it impossible to distinguish
-              if device.prefix == 'EEEE': judgement = 'CS2 Network P2P or iLnkP2P'
-              else: judgement = 'iLnkP2P'
-            else: judgement = 'CS2 Network P2P'
-
-            logging.info('===================================================\n'
-                        '[*] Found %s device %s at %s\n'
-                        '===================================================\n'
-                          % (judgement, device.uid, device.ip)
-                        )
+          devices = self.parsePunchPkt(buff)
         except Exception as e:
           logging.error('Failed to parse P2P message (%s): %s' % (e, buff))
           continue
+
+        if all(device.uid in self.devices for device in devices):
+          continue
+
+        for device in devices:
+          device.ip = rinfo[0]
+          self.devices[device.uid] = device
+
+          if device.isYunniDevice:
+            # the 'EEEE' prefix is used by both Yunni and CS2, but the check code makes it impossible to distinguish
+            if device.prefix == 'EEEE': judgement = 'CS2 Network P2P or iLnkP2P'
+            else: judgement = 'iLnkP2P'
+          else: judgement = 'CS2 Network P2P'
+
+        logging.info('===================================================\n'
+                     '[*] Found %s device %s at %s\n'
+                     '===================================================\n'
+                      % (judgement, ' or '.join(device.uid for device in devices), device.ip)
+                    )
       except socket.timeout as e:
         continue
 
@@ -208,25 +210,25 @@ class P2PClient:
     return Device(prefix.decode(), serial, checkCode.decode())
 
   @staticmethod
-  def parsePunchPkt(buff: bytes) -> Generator[Device, None, None]:
+  def parsePunchPkt(buff: bytes) -> list[Device]:
     if len(buff) < 4:
       raise Exception('Invalid P2P message')
 
-    found = False
+    devices = []
     device = P2PClient.is_valid_punch_pkt(buff)
     if device is not None:
-      found = True
-      yield device
+      devices.append(device)
     else:
       k1 = Encryption.KEY_TABLE.index(buff[0] ^ P2P_MAGIC_NUM)
       for key in Encryption.enumerate_keys(k1):
         device = P2PClient.is_valid_punch_pkt(Encryption.decrypt(key, buff))
         if device is not None:
-          found = True
-          yield device
+          devices.append(device)
 
-    if not found:
+    if not devices:
       raise Exception('Unexpected P2P message')
+
+    return devices
 
   def createP2PMessage(self, type, payload = bytes(0)):
     payloadSize = len(payload)
